@@ -1,0 +1,136 @@
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #17181c;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --accent: #2563eb;
+  --accent-fg: #ffffff;
+  --card-bg: #f9fafb;
+  --new: #e0483d;
+  --itviec: #ee0033;
+  --vietnamworks: #f5811f;
+  --linkedin: #0a66c2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161b;
+    --fg: #f2f2f2;
+    --muted: #9aa0aa;
+    --border: #2b2f37;
+    --card-bg: #1c1f26;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 5;
+}
+.logo { width: 36px; height: 36px; border-radius: 8px; }
+.titles h1 { margin: 0; font-size: 17px; }
+.muted { color: var(--muted); font-size: 12px; margin: 2px 0 0; }
+.top-actions { margin-left: auto; display: flex; gap: 8px; }
+
+button, select, input {
+  font-family: inherit;
+  font-size: 13px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--fg);
+  padding: 8px 12px;
+}
+button { cursor: pointer; font-weight: 600; }
+button:hover { filter: brightness(0.97); }
+#scanBtn { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+
+.stats {
+  display: flex;
+  gap: 10px;
+  padding: 16px 24px 0;
+  flex-wrap: wrap;
+}
+.stat {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 16px;
+  min-width: 110px;
+}
+.stat .num { font-size: 20px; font-weight: 700; display: block; }
+.stat .lbl { color: var(--muted); font-size: 11px; }
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 24px;
+  flex-wrap: wrap;
+}
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.chip.active { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+#search { flex: 1; min-width: 180px; }
+
+.list {
+  padding: 4px 24px 40px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+.list .empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 60px 0; }
+
+.card {
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.card-top { display: flex; align-items: center; gap: 6px; }
+.badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.badge.source.itviec { background: var(--itviec); }
+.badge.source.vietnamworks { background: var(--vietnamworks); }
+.badge.source.linkedin { background: var(--linkedin); }
+.badge.new { background: var(--new); display: none; }
+.card.is-new .badge.new { display: inline-block; }
+.posted { margin-left: auto; color: var(--muted); font-size: 11.5px; }
+.card h3 { margin: 4px 0 0; font-size: 14.5px; line-height: 1.3; }
+.card h3 a { color: var(--fg); text-decoration: none; }
+.card h3 a:hover { text-decoration: underline; }
+.card .company { margin: 0; font-weight: 600; font-size: 12.5px; }
+.card .location { margin: 0; color: var(--muted); font-size: 12px; }

@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Job Alert Scanner",
+  "version": "1.0.0",
+  "description": "Scans ITviec, VietnamWorks and LinkedIn for new job postings matching your role and notifies you when new ones appear.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications",
+    "scripting",
+    "tabs",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "https://itviec.com/*",
+    "https://www.vietnamworks.com/*",
+    "https://www.linkedin.com/*"
+  ]
+}

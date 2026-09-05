@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Job Alert Scanner</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="hdr">
+    <img src="icons/icon48.png" alt="" class="logo">
+    <div>
+      <h1>Job Alert Scanner</h1>
+      <p id="statusLine" class="muted">Loading…</p>
+    </div>
+  </header>
+
+  <main>
+    <label class="field">
+      <span>Role(s) to watch for</span>
+      <input id="roles" type="text" placeholder="e.g. product manager, product owner">
+      <small class="muted">Comma-separated. Each is searched on all three sites.</small>
+    </label>
+
+    <div class="row">
+      <label class="field">
+        <span>Refresh every</span>
+        <select id="interval"></select>
+      </label>
+
+      <label class="field">
+        <span>Posted within</span>
+        <select id="datePosted"></select>
+      </label>
+    </div>
+
+    <div class="actions">
+      <button id="saveBtn" class="primary">Save settings</button>
+      <button id="scanBtn">Scan now</button>
+    </div>
+
+    <p id="saveMsg" class="muted"></p>
+
+    <div class="preview">
+      <div class="preview-hdr">
+        <strong id="unreadCount">0 new</strong>
+        <a id="openResults" href="#">Open results ↗</a>
+      </div>
+      <ul id="previewList" class="preview-list"></ul>
+    </div>
+  </main>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
