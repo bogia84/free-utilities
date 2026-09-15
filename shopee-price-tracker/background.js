@@ -38,12 +38,18 @@ async function scheduleAlarm() {
 // A plain fetch() from the background service worker gets flagged by
 // Shopee's anti-bot check (it redirects to shopee.vn/verify/traffic/error)
 // even with real cookies attached — the request doesn't look like organic
-// browsing. So instead we open the actual product page in a tab (letting
-// Shopee's own page JS run, same as a real visit) and call the item API
-// from *inside* that page's context, same-origin, exactly like the page
-// itself does. Single-product checks open that tab in the foreground
-// (indistinguishable from the user clicking a link); bulk/background
-// checks keep it out of the way as an inactive tab instead.
+// browsing. Confirmed by testing: opening the real product page in a
+// *hidden* tab (background tab, or a minimized window) gets blocked the
+// same way, while pasting the exact same link into a normal tab works
+// fine — so Shopee (or its anti-bot vendor) is very likely keying off
+// document.hidden / the Page Visibility API, a cheap and common bot
+// signal. A plain foreground tab avoids that, but stealing the active
+// tab in the *same* window as the toolbar popup makes Chrome close the
+// popup the instant it loses focus. So: open a separate, small window
+// instead — not minimized (so it isn't "hidden"), but not focused either
+// (so the original window, and the popup anchored to it, are left
+// alone). Chrome refuses to place a new window mostly off-screen, so
+// it'll flash briefly on screen rather than staying fully out of sight.
 
 function waitForTabComplete(tabId) {
   return new Promise((resolve, reject) => {
@@ -78,16 +84,24 @@ async function fetchItemInPage(shopid, itemid) {
   }
 }
 
-async function fetchShopeeItem(shopid, itemid, link, foreground) {
-  const tab = await chrome.tabs.create({ url: link, active: foreground });
+async function fetchShopeeItem(shopid, itemid, link) {
+  const win = await chrome.windows.create({
+    url: link,
+    type: 'popup',
+    focused: false,
+    state: 'normal',
+    width: 480,
+    height: 360
+  });
+  const tabId = win.tabs[0].id;
   let raw;
   try {
-    await waitForTabComplete(tab.id);
+    await waitForTabComplete(tabId);
     await new Promise(r => setTimeout(r, RENDER_SETTLE_MS));
-    const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: fetchItemInPage, args: [shopid, itemid] });
+    const [{ result }] = await chrome.scripting.executeScript({ target: { tabId }, func: fetchItemInPage, args: [shopid, itemid] });
     raw = result;
   } finally {
-    await chrome.tabs.remove(tab.id).catch(() => {});
+    await chrome.windows.remove(win.id).catch(() => {});
   }
 
   if (!raw || raw.error) throw new Error(raw?.error || 'Could not reach the Shopee page');
@@ -118,10 +132,7 @@ async function addProduct(link) {
   const products = await getProducts();
   if (products.some(p => p.id === id)) throw new Error('This product is already saved.');
 
-  // Called from the toolbar popup — a foreground tab would steal window
-  // focus and Chrome auto-closes the popup the instant it loses focus,
-  // killing this request before it can show a result. Keep it backgrounded.
-  const info = await fetchShopeeItem(ids.shopid, ids.itemid, link, false);
+  const info = await fetchShopeeItem(ids.shopid, ids.itemid, link);
   const now = Date.now();
   const product = {
     id,
@@ -163,9 +174,9 @@ async function clearDropFlag(id) {
 
 // --- checking -----------------------------------------------------------
 
-async function checkOneProduct(product, foreground = false) {
+async function checkOneProduct(product) {
   try {
-    const info = await fetchShopeeItem(product.shopid, product.itemid, product.link, foreground);
+    const info = await fetchShopeeItem(product.shopid, product.itemid, product.link);
     const previousPrice = product.currentPrice;
     const now = Date.now();
     const dropped = typeof previousPrice === 'number' && typeof info.currentPrice === 'number' && info.currentPrice < previousPrice;
@@ -273,7 +284,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         const products = await getProducts();
         const idx = products.findIndex(p => p.id === message.id);
         if (idx === -1) { sendResponse({ ok: false, error: 'Product not found' }); break; }
-        const result = await checkOneProduct(products[idx], true);
+        const result = await checkOneProduct(products[idx]);
         const dropped = result._dropAmount > 0;
         delete result._dropAmount;
         products[idx] = result;
