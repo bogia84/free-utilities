@@ -1,6 +1,6 @@
 import {
   ALARM_NAME, CHECK_INTERVAL_MINUTES, extractShopeeIds, productKey,
-  priceFromApi, pushHistoryPoint
+  priceFromApi, pushHistoryPoint, todayKey
 } from './common.js';
 import { getProducts, saveProducts, getLastCheck, saveLastCheck } from './storage.js';
 
@@ -263,16 +263,34 @@ async function checkOneProduct(product, foreground = false) {
   }
 }
 
+// A product freshly updated by the reliable passive content-script capture
+// (see recordPageObservation) shouldn't immediately get re-checked by this
+// unreliable automated path and have that good, fresh data overwritten by
+// a spurious anti-bot error. So bulk checks only touch products that
+// haven't had a clean check yet today.
+function needsBulkCheck(product, now) {
+  if (!product.lastCheckedAt) return true;
+  if (product.lastError) return true;
+  return todayKey(product.lastCheckedAt) !== todayKey(now);
+}
+
 export async function checkAllProducts(trigger) {
   if (checking) return { skipped: true, reason: 'A check is already running' };
   checking = true;
   try {
+    const now = Date.now();
     const products = await getProducts();
     const updated = [];
     const drops = [];
     const errors = [];
+    let checkedCount = 0;
 
     for (const product of products) {
+      if (!needsBulkCheck(product, now)) {
+        updated.push(product);
+        continue;
+      }
+      checkedCount++;
       const result = await checkOneProduct(product);
       if (result._dropAmount > 0) drops.push(result);
       if (result.lastError) errors.push(`${result.name || result.id}: ${result.lastError}`);
@@ -283,7 +301,7 @@ export async function checkAllProducts(trigger) {
     await saveProducts(updated);
     await updateBadge(updated);
 
-    const info = { at: Date.now(), trigger, checkedCount: updated.length, dropCount: drops.length, errors };
+    const info = { at: now, trigger, checkedCount, dropCount: drops.length, errors };
     await saveLastCheck(info);
 
     if (drops.length > 0) notifyDrops(drops);
