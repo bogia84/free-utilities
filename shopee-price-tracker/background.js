@@ -38,10 +38,12 @@ async function scheduleAlarm() {
 // A plain fetch() from the background service worker gets flagged by
 // Shopee's anti-bot check (it redirects to shopee.vn/verify/traffic/error)
 // even with real cookies attached — the request doesn't look like organic
-// browsing. So instead we open the actual product page in a hidden
-// background tab (letting Shopee's own page JS run, same as a real visit)
-// and call the item API from *inside* that page's context, same-origin,
-// exactly like the page itself does.
+// browsing. So instead we open the actual product page in a tab (letting
+// Shopee's own page JS run, same as a real visit) and call the item API
+// from *inside* that page's context, same-origin, exactly like the page
+// itself does. Single-product checks open that tab in the foreground
+// (indistinguishable from the user clicking a link); bulk/background
+// checks keep it out of the way as an inactive tab instead.
 
 function waitForTabComplete(tabId) {
   return new Promise((resolve, reject) => {
@@ -76,17 +78,16 @@ async function fetchItemInPage(shopid, itemid) {
   }
 }
 
-async function fetchShopeeItem(shopid, itemid, link) {
-  const win = await chrome.windows.create({ url: link, focused: false, state: 'minimized', type: 'popup' });
-  const tabId = win.tabs[0].id;
+async function fetchShopeeItem(shopid, itemid, link, foreground) {
+  const tab = await chrome.tabs.create({ url: link, active: foreground });
   let raw;
   try {
-    await waitForTabComplete(tabId);
+    await waitForTabComplete(tab.id);
     await new Promise(r => setTimeout(r, RENDER_SETTLE_MS));
-    const [{ result }] = await chrome.scripting.executeScript({ target: { tabId }, func: fetchItemInPage, args: [shopid, itemid] });
+    const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: fetchItemInPage, args: [shopid, itemid] });
     raw = result;
   } finally {
-    await chrome.windows.remove(win.id).catch(() => {});
+    await chrome.tabs.remove(tab.id).catch(() => {});
   }
 
   if (!raw || raw.error) throw new Error(raw?.error || 'Could not reach the Shopee page');
@@ -117,7 +118,7 @@ async function addProduct(link) {
   const products = await getProducts();
   if (products.some(p => p.id === id)) throw new Error('This product is already saved.');
 
-  const info = await fetchShopeeItem(ids.shopid, ids.itemid, link);
+  const info = await fetchShopeeItem(ids.shopid, ids.itemid, link, true);
   const now = Date.now();
   const product = {
     id,
@@ -159,9 +160,9 @@ async function clearDropFlag(id) {
 
 // --- checking -----------------------------------------------------------
 
-async function checkOneProduct(product) {
+async function checkOneProduct(product, foreground = false) {
   try {
-    const info = await fetchShopeeItem(product.shopid, product.itemid, product.link);
+    const info = await fetchShopeeItem(product.shopid, product.itemid, product.link, foreground);
     const previousPrice = product.currentPrice;
     const now = Date.now();
     const dropped = typeof previousPrice === 'number' && typeof info.currentPrice === 'number' && info.currentPrice < previousPrice;
@@ -269,7 +270,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         const products = await getProducts();
         const idx = products.findIndex(p => p.id === message.id);
         if (idx === -1) { sendResponse({ ok: false, error: 'Product not found' }); break; }
-        const result = await checkOneProduct(products[idx]);
+        const result = await checkOneProduct(products[idx], true);
         const dropped = result._dropAmount > 0;
         delete result._dropAmount;
         products[idx] = result;
