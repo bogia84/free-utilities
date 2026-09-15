@@ -2,17 +2,11 @@ import { formatPrice, timeAgo } from './common.js';
 
 const addForm = document.getElementById('addForm');
 const linkInput = document.getElementById('linkInput');
-const addBtn = document.getElementById('addBtn');
-const addMsg = document.getElementById('addMsg');
 const checkBtn = document.getElementById('checkBtn');
 const statusLine = document.getElementById('statusLine');
 const countLabel = document.getElementById('countLabel');
 const listEl = document.getElementById('productList');
 const itemTemplate = document.getElementById('itemTemplate');
-
-function escapeHtml(str) {
-  return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
 
 function priceChange(product) {
   const history = product.history || [];
@@ -87,29 +81,17 @@ async function load() {
   }
 }
 
-addForm.addEventListener('submit', async e => {
+addForm.addEventListener('submit', e => {
   e.preventDefault();
   const link = linkInput.value.trim();
   if (!link) return;
 
-  addBtn.disabled = true;
-  addBtn.textContent = 'Adding…';
-  addMsg.textContent = 'Fetching product info — this can take a few seconds…';
-  addMsg.className = 'msg';
-  try {
-    const res = await chrome.runtime.sendMessage({ type: 'ADD_PRODUCT', link });
-    if (!res.ok) throw new Error(res.error);
-    linkInput.value = '';
-    addMsg.textContent = `Added "${escapeHtml(res.product.name || 'product')}".`;
-    addMsg.className = 'msg ok';
-    load();
-  } catch (err) {
-    addMsg.textContent = err.message || String(err);
-    addMsg.className = 'msg error';
-  } finally {
-    addBtn.disabled = false;
-    addBtn.textContent = 'Add';
-  }
+  // Adding needs to open the real Shopee page with actual browser focus to
+  // avoid Shopee's anti-bot check — which this small toolbar popup can't do
+  // without Chrome closing it the instant focus moves away. So hand off to
+  // a full page that can survive that.
+  chrome.tabs.create({ url: chrome.runtime.getURL(`add.html?link=${encodeURIComponent(link)}`) });
+  linkInput.value = '';
 });
 
 checkBtn.addEventListener('click', async () => {

@@ -39,17 +39,30 @@ async function scheduleAlarm() {
 // Shopee's anti-bot check (it redirects to shopee.vn/verify/traffic/error)
 // even with real cookies attached — the request doesn't look like organic
 // browsing. Confirmed by testing: opening the real product page in a
-// *hidden* tab (background tab, or a minimized window) gets blocked the
-// same way, while pasting the exact same link into a normal tab works
-// fine — so Shopee (or its anti-bot vendor) is very likely keying off
-// document.hidden / the Page Visibility API, a cheap and common bot
-// signal. A plain foreground tab avoids that, but stealing the active
-// tab in the *same* window as the toolbar popup makes Chrome close the
-// popup the instant it loses focus. So: open a separate, small window
-// instead — not minimized (so it isn't "hidden"), but not focused either
-// (so the original window, and the popup anchored to it, are left
-// alone). Chrome refuses to place a new window mostly off-screen, so
-// it'll flash briefly on screen rather than staying fully out of sight.
+// hidden tab, a minimized window, and even a visible-but-unfocused window
+// all get blocked the same way, while pasting the exact same link into a
+// normal, focused tab works fine. So single-product checks (called from
+// add.html / product.html — real persistent tabs, not the transient
+// toolbar popup) open the Shopee tab with real focus, indistinguishable
+// from the user clicking a link. Bulk/background checks (the daily
+// alarm, "Check now" on the full list from the popup) can't safely steal
+// focus like that, so they stay backgrounded and are best-effort only.
+
+async function openShopeeTab(link, foreground) {
+  if (foreground) {
+    const tab = await chrome.tabs.create({ url: link, active: true });
+    return { tabId: tab.id, close: () => chrome.tabs.remove(tab.id) };
+  }
+  const win = await chrome.windows.create({
+    url: link,
+    type: 'popup',
+    focused: false,
+    state: 'normal',
+    width: 480,
+    height: 360
+  });
+  return { tabId: win.tabs[0].id, close: () => chrome.windows.remove(win.id) };
+}
 
 function waitForTabComplete(tabId) {
   return new Promise((resolve, reject) => {
@@ -84,24 +97,16 @@ async function fetchItemInPage(shopid, itemid) {
   }
 }
 
-async function fetchShopeeItem(shopid, itemid, link) {
-  const win = await chrome.windows.create({
-    url: link,
-    type: 'popup',
-    focused: false,
-    state: 'normal',
-    width: 480,
-    height: 360
-  });
-  const tabId = win.tabs[0].id;
+async function fetchShopeeItem(shopid, itemid, link, foreground) {
+  const handle = await openShopeeTab(link, foreground);
   let raw;
   try {
-    await waitForTabComplete(tabId);
+    await waitForTabComplete(handle.tabId);
     await new Promise(r => setTimeout(r, RENDER_SETTLE_MS));
-    const [{ result }] = await chrome.scripting.executeScript({ target: { tabId }, func: fetchItemInPage, args: [shopid, itemid] });
+    const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: handle.tabId }, func: fetchItemInPage, args: [shopid, itemid] });
     raw = result;
   } finally {
-    await chrome.windows.remove(win.id).catch(() => {});
+    await handle.close().catch(() => {});
   }
 
   if (!raw || raw.error) throw new Error(raw?.error || 'Could not reach the Shopee page');
@@ -132,7 +137,7 @@ async function addProduct(link) {
   const products = await getProducts();
   if (products.some(p => p.id === id)) throw new Error('This product is already saved.');
 
-  const info = await fetchShopeeItem(ids.shopid, ids.itemid, link);
+  const info = await fetchShopeeItem(ids.shopid, ids.itemid, link, true);
   const now = Date.now();
   const product = {
     id,
@@ -174,9 +179,9 @@ async function clearDropFlag(id) {
 
 // --- checking -----------------------------------------------------------
 
-async function checkOneProduct(product) {
+async function checkOneProduct(product, foreground = false) {
   try {
-    const info = await fetchShopeeItem(product.shopid, product.itemid, product.link);
+    const info = await fetchShopeeItem(product.shopid, product.itemid, product.link, foreground);
     const previousPrice = product.currentPrice;
     const now = Date.now();
     const dropped = typeof previousPrice === 'number' && typeof info.currentPrice === 'number' && info.currentPrice < previousPrice;
@@ -284,7 +289,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         const products = await getProducts();
         const idx = products.findIndex(p => p.id === message.id);
         if (idx === -1) { sendResponse({ ok: false, error: 'Product not found' }); break; }
-        const result = await checkOneProduct(products[idx]);
+        const result = await checkOneProduct(products[idx], true);
         const dropped = result._dropAmount > 0;
         delete result._dropAmount;
         products[idx] = result;
