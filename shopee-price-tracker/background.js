@@ -177,6 +177,63 @@ async function clearDropFlag(id) {
   }
 }
 
+// --- passive content-script capture --------------------------------------
+//
+// content.js reads whatever price is already rendered on a Shopee product
+// page the user genuinely navigated to themselves — no fetch of our own,
+// so nothing here for Shopee's anti-bot check to catch. This is the
+// reliable path; fetchShopeeItem() above is the best-effort automated one.
+
+async function recordPageObservation(info, createIfMissing) {
+  const id = productKey(info.shopid, info.itemid);
+  const products = await getProducts();
+  const idx = products.findIndex(p => p.id === id);
+  const now = Date.now();
+
+  if (idx === -1) {
+    if (!createIfMissing) return { tracked: false, product: null };
+    const product = {
+      id,
+      shopid: info.shopid,
+      itemid: info.itemid,
+      link: info.link,
+      name: info.name,
+      image: info.image || null,
+      currency: info.currency || 'VND',
+      currentPrice: info.price,
+      priceBeforeDiscount: null,
+      stock: null,
+      itemStatus: null,
+      addedAt: now,
+      lastCheckedAt: now,
+      lastError: null,
+      hasNewDrop: false,
+      history: pushHistoryPoint([], info.price, now)
+    };
+    products.push(product);
+    await saveProducts(products);
+    return { tracked: true, product };
+  }
+
+  const previous = products[idx];
+  const dropped = typeof previous.currentPrice === 'number' && typeof info.price === 'number' && info.price < previous.currentPrice;
+  const updated = {
+    ...previous,
+    name: info.name || previous.name,
+    image: info.image || previous.image,
+    currentPrice: info.price,
+    lastCheckedAt: now,
+    lastError: null,
+    hasNewDrop: previous.hasNewDrop || dropped,
+    history: pushHistoryPoint(previous.history, info.price, now)
+  };
+  products[idx] = updated;
+  await saveProducts(products);
+  await updateBadge(products);
+  if (dropped) notifyDrops([updated]);
+  return { tracked: true, product: updated };
+}
+
 // --- checking -----------------------------------------------------------
 
 async function checkOneProduct(product, foreground = false) {
@@ -301,6 +358,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
       case 'CLEAR_DROP_FLAG': {
         await clearDropFlag(message.id);
+        sendResponse({ ok: true });
+        break;
+      }
+      case 'PAGE_PRODUCT_SEEN': {
+        const result = await recordPageObservation(message.info, false);
+        sendResponse({ ok: true, tracked: result.tracked });
+        break;
+      }
+      case 'ADD_FROM_PAGE': {
+        const result = await recordPageObservation(message.info, true);
+        sendResponse({ ok: true, product: result.product });
+        break;
+      }
+      case 'OPEN_PRODUCT_TAB': {
+        const id = productKey(message.shopid, message.itemid);
+        chrome.tabs.create({ url: chrome.runtime.getURL(`product.html?id=${encodeURIComponent(id)}`) });
         sendResponse({ ok: true });
         break;
       }

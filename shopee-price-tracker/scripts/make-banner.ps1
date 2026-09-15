@@ -100,11 +100,11 @@ $g.DrawString("Shopee Price Tracker", $titleFont, [System.Drawing.Brushes]::Whit
 
 $taglineFont = New-Object System.Drawing.Font("Segoe UI", 22, [System.Drawing.FontStyle]::Regular)
 $taglineBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(235, 255, 255, 255))
-$g.DrawString("Save any Shopee product link.", $taglineFont, $taglineBrush, $textX, 320)
-$g.DrawString("We check the price every day and chart the changes.", $taglineFont, $taglineBrush, $textX, 360)
+$g.DrawString("Browse Shopee, click Track.", $taglineFont, $taglineBrush, $textX, 320)
+$g.DrawString("We chart the price changes for you.", $taglineFont, $taglineBrush, $textX, 360)
 
 # feature chips
-$chips = @("Daily checks", "Price chart", "Drop alerts")
+$chips = @("One-click tracking", "Price chart", "Drop alerts")
 $chipFont = New-Object System.Drawing.Font("Segoe UI", 18, [System.Drawing.FontStyle]::Bold)
 $chipY = 460
 $chipX = $textX

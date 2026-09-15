@@ -57,6 +57,7 @@ main { padding: 14px 16px 16px; }
   min-width: 0;
 }
 .hint { color: var(--muted); font-size: 11px; margin: 6px 0 0; line-height: 1.4; }
+.hint-primary { margin: 0 0 8px; }
 
 button {
   padding: 7px 12px;

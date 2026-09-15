@@ -1,0 +1,26 @@
+#__shopee_price_tracker_badge__ {
+  all: initial;
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483647;
+}
+
+#__shopee_price_tracker_btn__ {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: none;
+  background: #ee4d2d;
+  color: #ffffff;
+  font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+#__shopee_price_tracker_btn__:hover { filter: brightness(1.05); }
+#__shopee_price_tracker_btn__:disabled { opacity: 0.7; cursor: default; }
