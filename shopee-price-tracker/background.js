@@ -1,8 +1,11 @@
 import {
-  ALARM_NAME, CHECK_INTERVAL_MINUTES, extractShopeeIds, buildApiUrl, productKey,
+  ALARM_NAME, CHECK_INTERVAL_MINUTES, extractShopeeIds, productKey,
   priceFromApi, pushHistoryPoint
 } from './common.js';
 import { getProducts, saveProducts, getLastCheck, saveLastCheck } from './storage.js';
+
+const WINDOW_LOAD_TIMEOUT_MS = 15000;
+const RENDER_SETTLE_MS = 2000;
 
 let checking = false;
 
@@ -30,25 +33,69 @@ async function scheduleAlarm() {
   chrome.alarms.create(ALARM_NAME, { periodInMinutes: CHECK_INTERVAL_MINUTES, delayInMinutes: 1 });
 }
 
-// --- Shopee API -----------------------------------------------------------
+// --- Shopee item lookup ----------------------------------------------------
+//
+// A plain fetch() from the background service worker gets flagged by
+// Shopee's anti-bot check (it redirects to shopee.vn/verify/traffic/error)
+// even with real cookies attached — the request doesn't look like organic
+// browsing. So instead we open the actual product page in a hidden
+// background tab (letting Shopee's own page JS run, same as a real visit)
+// and call the item API from *inside* that page's context, same-origin,
+// exactly like the page itself does.
 
-async function fetchShopeeItem(shopid, itemid, referer) {
-  const res = await fetch(buildApiUrl(shopid, itemid), {
-    credentials: 'include',
-    headers: { Accept: 'application/json', Referer: referer }
-  });
-  if (res.status === 403 || res.status === 429) {
-    throw new Error('Shopee blocked this request (anti-bot check). Browse shopee.vn normally in this browser for a bit, then try again.');
-  }
-  if (!res.ok) throw new Error(`Shopee API HTTP ${res.status}`);
-  const json = await res.json();
-  if (!json?.data) {
-    if (json?.error) {
-      throw new Error('Shopee blocked this request (anti-bot check). Browse shopee.vn normally in this browser for a bit, then try again.');
+function waitForTabComplete(tabId) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      reject(new Error('Timed out waiting for the Shopee page to load'));
+    }, WINDOW_LOAD_TIMEOUT_MS);
+
+    function listener(updatedTabId, changeInfo) {
+      if (updatedTabId === tabId && changeInfo.status === 'complete') {
+        clearTimeout(timer);
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
     }
-    throw new Error(json?.error_msg || 'Product not found (it may be removed or banned)');
+    chrome.tabs.onUpdated.addListener(listener);
+  });
+}
+
+// Runs inside the Shopee tab (chrome.scripting.executeScript), not the
+// background worker — no access to outer-scope variables/imports here.
+async function fetchItemInPage(shopid, itemid) {
+  try {
+    const res = await fetch(`/api/v4/item/get?itemid=${itemid}&shopid=${shopid}`, {
+      credentials: 'include',
+      headers: { Accept: 'application/json' }
+    });
+    const json = await res.json().catch(() => null);
+    return { status: res.status, json };
+  } catch (err) {
+    return { status: 0, error: String(err) };
   }
-  const d = json.data;
+}
+
+async function fetchShopeeItem(shopid, itemid, link) {
+  const win = await chrome.windows.create({ url: link, focused: false, state: 'minimized', type: 'popup' });
+  const tabId = win.tabs[0].id;
+  let raw;
+  try {
+    await waitForTabComplete(tabId);
+    await new Promise(r => setTimeout(r, RENDER_SETTLE_MS));
+    const [{ result }] = await chrome.scripting.executeScript({ target: { tabId }, func: fetchItemInPage, args: [shopid, itemid] });
+    raw = result;
+  } finally {
+    await chrome.windows.remove(win.id).catch(() => {});
+  }
+
+  if (!raw || raw.error) throw new Error(raw?.error || 'Could not reach the Shopee page');
+  if (raw.status === 403 || raw.status === 429 || raw.json?.error) {
+    throw new Error('Shopee blocked this request (anti-bot check). Try again in a bit, ideally while logged into Shopee in this browser.');
+  }
+  if (!raw.json?.data) throw new Error(raw.json?.error_msg || 'Product not found (it may be removed or banned)');
+
+  const d = raw.json.data;
   return {
     name: d.name,
     image: d.image ? `https://cf.shopee.vn/file/${d.image}` : null,

@@ -29,10 +29,6 @@ export function extractShopeeIds(link) {
   return null;
 }
 
-export function buildApiUrl(shopid, itemid) {
-  return `https://shopee.vn/api/v4/item/get?itemid=${encodeURIComponent(itemid)}&shopid=${encodeURIComponent(shopid)}`;
-}
-
 export function productKey(shopid, itemid) {
   return `${shopid}_${itemid}`;
 }
