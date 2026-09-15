@@ -91,7 +91,7 @@ async function fetchShopeeItem(shopid, itemid, link) {
 
   if (!raw || raw.error) throw new Error(raw?.error || 'Could not reach the Shopee page');
   if (raw.status === 403 || raw.status === 429 || raw.json?.error) {
-    throw new Error('Shopee blocked this request (anti-bot check). Try again in a bit, ideally while logged into Shopee in this browser.');
+    throw new Error('Shopee blocked this request (anti-bot check). Log into your Shopee account in this browser, then try again — Shopee blocks price checks from signed-out sessions much more aggressively.');
   }
   if (!raw.json?.data) throw new Error(raw.json?.error_msg || 'Product not found (it may be removed or banned)');
 

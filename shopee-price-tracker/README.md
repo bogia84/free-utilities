@@ -22,7 +22,7 @@ A Chrome extension that saves [Shopee](https://shopee.vn) product links and chec
 - Shortened/share links (`shp.ee/...`) aren't resolved — paste the full product page URL instead.
 - If a product is removed, banned, or Shopee changes its API response shape, that product's check will show an error message instead of a price until it's fixed.
 - History is recorded once per calendar day; running "Check now" multiple times in the same day updates that day's point rather than adding a new one.
-- **Shopee's anti-bot check.** Even routed through a real page load, Shopee can occasionally still flag a check and show "Shopee blocked this request (anti-bot check)" — this was observed happening on a plain background `fetch()` (now fixed) and may still show up under heavy/rapid checking. Being logged into Shopee in the same Chrome profile makes it much less likely.
+- **Shopee's anti-bot check.** Shopee blocks price-check requests much more aggressively from a signed-out browser than a signed-in one — a never-logged-in Chrome profile reliably gets walled off with "Shopee blocked this request (anti-bot check)". **Log into your Shopee account in the same Chrome browser first**; that alone resolves most cases. It can still occasionally trigger under heavy/rapid checking even when logged in.
 
 ## Install (unpacked)
 
