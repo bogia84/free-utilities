@@ -37,7 +37,7 @@ async function clearDropFlag(id) {
 }
 
 async function recordPageObservation(info, createIfMissing) {
-  const id = productKey(info.shopid, info.itemid);
+  const id = productKey(info.shopid, info.itemid, info.modelid);
   const products = await getProducts();
   const idx = products.findIndex(p => p.id === id);
   const now = Date.now();
@@ -48,6 +48,7 @@ async function recordPageObservation(info, createIfMissing) {
       id,
       shopid: info.shopid,
       itemid: info.itemid,
+      modelid: info.modelid || null,
       link: info.link,
       name: info.name,
       image: info.image || null,
@@ -133,7 +134,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         break;
       }
       case 'OPEN_PRODUCT_TAB': {
-        const id = productKey(message.shopid, message.itemid);
+        const id = productKey(message.shopid, message.itemid, message.modelid);
         chrome.tabs.create({ url: chrome.runtime.getURL(`product.html?id=${encodeURIComponent(id)}`) });
         sendResponse({ ok: true });
         break;

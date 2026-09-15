@@ -5,6 +5,11 @@ export const MAX_HISTORY_POINTS = 365;
 // Recognizes the two link shapes Shopee product pages use:
 //   https://shopee.vn/some-product-name-i.{shopid}.{itemid}
 //   https://shopee.vn/product/{shopid}/{itemid}
+// Some links (e.g. from search results) also carry a specific variant via
+// ?extraParams={"display_model_id":...} — when present, that lets a
+// particular variant be tracked as its own entry, separate from the base
+// product. Clicking a variant option in-page doesn't change the URL, so
+// this only catches variants that arrive via a link that already names one.
 export function extractShopeeIds(link) {
   if (!link) return null;
   let url;
@@ -15,17 +20,30 @@ export function extractShopeeIds(link) {
   }
   if (!/(^|\.)shopee\.vn$/.test(url.hostname)) return null;
 
+  let base = null;
   let m = url.pathname.match(/-i\.(\d+)\.(\d+)(?:$|\/)/);
-  if (m) return { shopid: m[1], itemid: m[2] };
+  if (m) base = { shopid: m[1], itemid: m[2] };
+  if (!base) {
+    m = url.pathname.match(/\/product\/(\d+)\/(\d+)/);
+    if (m) base = { shopid: m[1], itemid: m[2] };
+  }
+  if (!base) return null;
 
-  m = url.pathname.match(/\/product\/(\d+)\/(\d+)/);
-  if (m) return { shopid: m[1], itemid: m[2] };
-
-  return null;
+  let modelid = null;
+  const extraParamsRaw = url.searchParams.get('extraParams');
+  if (extraParamsRaw) {
+    try {
+      const parsed = JSON.parse(extraParamsRaw);
+      if (parsed?.display_model_id) modelid = String(parsed.display_model_id);
+    } catch {
+      // malformed/unexpected extraParams — just skip the variant hint
+    }
+  }
+  return { ...base, modelid };
 }
 
-export function productKey(shopid, itemid) {
-  return `${shopid}_${itemid}`;
+export function productKey(shopid, itemid, modelid) {
+  return modelid ? `${shopid}_${itemid}_${modelid}` : `${shopid}_${itemid}`;
 }
 
 export function formatPrice(value, currency = 'VND') {

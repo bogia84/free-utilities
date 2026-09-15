@@ -11,11 +11,29 @@
     let url;
     try { url = new URL(href); } catch { return null; }
     if (!/(^|\.)shopee\.vn$/.test(url.hostname)) return null;
+
+    let base = null;
     let m = url.pathname.match(/-i\.(\d+)\.(\d+)(?:$|\/)/);
-    if (m) return { shopid: m[1], itemid: m[2] };
-    m = url.pathname.match(/\/product\/(\d+)\/(\d+)/);
-    if (m) return { shopid: m[1], itemid: m[2] };
-    return null;
+    if (m) base = { shopid: m[1], itemid: m[2] };
+    if (!base) {
+      m = url.pathname.match(/\/product\/(\d+)\/(\d+)/);
+      if (m) base = { shopid: m[1], itemid: m[2] };
+    }
+    if (!base) return null;
+
+    // If the link names a specific variant (e.g. from search results),
+    // that lets this exact variant be tracked separately from the base
+    // product. Clicking a variant option in-page doesn't change the URL,
+    // so this alone can't catch that — see readVisiblePrice() below.
+    let modelid = null;
+    const extraParamsRaw = url.searchParams.get('extraParams');
+    if (extraParamsRaw) {
+      try {
+        const parsed = JSON.parse(extraParamsRaw);
+        if (parsed?.display_model_id) modelid = String(parsed.display_model_id);
+      } catch {}
+    }
+    return { ...base, modelid };
   }
 
   const ids = extractShopeeIds(location.href);
@@ -81,11 +99,11 @@
     return null;
   }
 
-  function readOgAndVisiblePrice() {
-    const ogTitle = document.querySelector('meta[property="og:title"]')?.content;
-    const ogImage = document.querySelector('meta[property="og:image"]')?.content;
-    if (!ogTitle) return null;
-
+  // JSON-LD/microdata are typically SEO snapshots from the initial render
+  // and don't update when you pick a different variant, so they can only
+  // be trusted for name/image, not price — the live, on-screen price is
+  // the only thing that reflects the variant you've actually selected.
+  function readVisiblePrice() {
     const priceRegex = /(?:₫\s?[\d.,]+|[\d.,]+\s?₫)/;
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     let node;
@@ -94,13 +112,40 @@
       if (!text || text.length > 40 || !priceRegex.test(text)) continue;
       const raw = text.replace(/[₫\s]/g, '').replace(/\./g, '').replace(/,/g, '');
       const price = Number(raw);
-      if (price > 0) return { name: ogTitle, image: ogImage || null, price, currency: 'VND' };
+      if (price > 0) return price;
     }
     return null;
   }
 
   function extractProductInfo() {
-    return readJsonLd() || readMicrodata() || readOgAndVisiblePrice();
+    const structured = readJsonLd() || readMicrodata();
+    const livePrice = readVisiblePrice();
+    if (livePrice) {
+      return {
+        name: structured?.name || document.querySelector('meta[property="og:title"]')?.content || document.title,
+        image: structured?.image || document.querySelector('meta[property="og:image"]')?.content || null,
+        price: livePrice,
+        currency: structured?.currency || 'VND'
+      };
+    }
+    return structured;
+  }
+
+  function formatVnd(n) {
+    return `${n.toLocaleString('vi-VN')} ₫`;
+  }
+
+  function buildPayload(info) {
+    return {
+      shopid: ids.shopid,
+      itemid: ids.itemid,
+      modelid: ids.modelid,
+      link: location.href.split('?')[0],
+      name: info.name,
+      image: info.image,
+      price: info.price,
+      currency: info.currency
+    };
   }
 
   let badgeHost = null;
@@ -120,26 +165,31 @@
     btn.id = '__shopee_price_tracker_btn__';
 
     if (tracked) {
-      btn.textContent = '★ Price tracked';
+      btn.textContent = `★ Tracked — ${formatVnd(payload.price)}`;
       btn.title = 'Open price history';
       btn.addEventListener('click', async () => {
-        const res = await safeSendMessage({ type: 'OPEN_PRODUCT_TAB', shopid: ids.shopid, itemid: ids.itemid });
+        const res = await safeSendMessage({ type: 'OPEN_PRODUCT_TAB', shopid: ids.shopid, itemid: ids.itemid, modelid: ids.modelid });
         if (!res) { btn.textContent = 'Reload page to continue'; btn.disabled = true; }
       });
     } else {
-      btn.textContent = '☆ Track this price';
+      btn.textContent = `☆ Track this price — ${formatVnd(payload.price)}`;
       btn.title = "Start tracking this product's price";
       btn.addEventListener('click', async () => {
+        // Re-read live, in case a different variant is selected now than
+        // when the badge first rendered.
+        const fresh = extractProductInfo();
+        const info = fresh ? buildPayload(fresh) : payload;
+
         btn.disabled = true;
         btn.textContent = 'Adding…';
-        const res = await safeSendMessage({ type: 'ADD_FROM_PAGE', info: payload });
+        const res = await safeSendMessage({ type: 'ADD_FROM_PAGE', info });
         if (res?.ok) {
-          renderBadge(true, payload);
+          renderBadge(true, info);
         } else if (!res) {
           btn.textContent = 'Reload page to continue';
         } else {
           btn.disabled = false;
-          btn.textContent = '☆ Track this price';
+          btn.textContent = `☆ Track this price — ${formatVnd(payload.price)}`;
         }
       });
     }
@@ -154,16 +204,7 @@
     }
     if (!info) return; // couldn't confidently read a price — stay silent, don't disrupt the page
 
-    const payload = {
-      shopid: ids.shopid,
-      itemid: ids.itemid,
-      link: location.href.split('?')[0],
-      name: info.name,
-      image: info.image,
-      price: info.price,
-      currency: info.currency
-    };
-
+    const payload = buildPayload(info);
     const res = await safeSendMessage({ type: 'PAGE_PRODUCT_SEEN', info: payload });
     if (res) renderBadge(!!res.tracked, payload);
     // else: extension context is stale (reloaded/updated) — stay silent

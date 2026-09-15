@@ -130,7 +130,8 @@ function render(product) {
   }
 
   const metaEl = node.querySelector('.meta');
-  metaEl.textContent = `Updated ${timeAgo(product.lastCheckedAt)} · Added ${new Date(product.addedAt).toLocaleDateString('en-GB')}`;
+  metaEl.textContent = `Updated ${timeAgo(product.lastCheckedAt)} · Added ${new Date(product.addedAt).toLocaleDateString('en-GB')}` +
+    (product.modelid ? ' · Specific variant' : '');
 
   const history = (product.history || []).map(p => ({ ...p, currency: product.currency }));
   mainEl.appendChild(node);
