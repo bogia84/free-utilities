@@ -21,6 +21,25 @@
   const ids = extractShopeeIds(location.href);
   if (!ids) return;
 
+  // If the extension was reloaded/updated after this content script
+  // injected, chrome.runtime becomes disconnected from this page and any
+  // call throws "Extension context invalidated" — reloading the page (not
+  // this script) is the only fix, so surface that instead of an uncaught
+  // error or a button that just silently does nothing.
+  function safeSendMessage(message) {
+    return new Promise(resolve => {
+      if (!chrome.runtime?.id) { resolve(null); return; }
+      try {
+        chrome.runtime.sendMessage(message, res => {
+          if (chrome.runtime.lastError) { resolve(null); return; }
+          resolve(res ?? null);
+        });
+      } catch {
+        resolve(null);
+      }
+    });
+  }
+
   function readJsonLd() {
     for (const script of document.querySelectorAll('script[type="application/ld+json"]')) {
       let data;
@@ -103,22 +122,25 @@
     if (tracked) {
       btn.textContent = '★ Price tracked';
       btn.title = 'Open price history';
-      btn.addEventListener('click', () => {
-        chrome.runtime.sendMessage({ type: 'OPEN_PRODUCT_TAB', shopid: ids.shopid, itemid: ids.itemid });
+      btn.addEventListener('click', async () => {
+        const res = await safeSendMessage({ type: 'OPEN_PRODUCT_TAB', shopid: ids.shopid, itemid: ids.itemid });
+        if (!res) { btn.textContent = 'Reload page to continue'; btn.disabled = true; }
       });
     } else {
       btn.textContent = '☆ Track this price';
       btn.title = "Start tracking this product's price";
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         btn.disabled = true;
         btn.textContent = 'Adding…';
-        chrome.runtime.sendMessage({ type: 'ADD_FROM_PAGE', info: payload }, res => {
-          if (res?.ok) renderBadge(true, payload);
-          else {
-            btn.disabled = false;
-            btn.textContent = '☆ Track this price';
-          }
-        });
+        const res = await safeSendMessage({ type: 'ADD_FROM_PAGE', info: payload });
+        if (res?.ok) {
+          renderBadge(true, payload);
+        } else if (!res) {
+          btn.textContent = 'Reload page to continue';
+        } else {
+          btn.disabled = false;
+          btn.textContent = '☆ Track this price';
+        }
       });
     }
     host.appendChild(btn);
@@ -142,9 +164,11 @@
       currency: info.currency
     };
 
-    chrome.runtime.sendMessage({ type: 'PAGE_PRODUCT_SEEN', info: payload }, res => {
-      renderBadge(!!res?.tracked, payload);
-    });
+    const res = await safeSendMessage({ type: 'PAGE_PRODUCT_SEEN', info: payload });
+    if (res) renderBadge(!!res.tracked, payload);
+    // else: extension context is stale (reloaded/updated) — stay silent
+    // rather than show a button whose click would also fail; a page
+    // refresh brings a fresh content script that works normally.
   }
 
   run();
