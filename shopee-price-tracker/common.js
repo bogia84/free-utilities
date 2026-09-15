@@ -1,11 +1,6 @@
 // Shared constants and helpers used by background, popup and product pages.
 
-export const ALARM_NAME = 'shopee-price-check';
-export const CHECK_INTERVAL_MINUTES = 1440; // once a day
 export const MAX_HISTORY_POINTS = 365;
-
-// Shopee prices come back from the API scaled by 100000 (e.g. 250000 VND -> 25000000000).
-const PRICE_SCALE = 100000;
 
 // Recognizes the two link shapes Shopee product pages use:
 //   https://shopee.vn/some-product-name-i.{shopid}.{itemid}
@@ -31,11 +26,6 @@ export function extractShopeeIds(link) {
 
 export function productKey(shopid, itemid) {
   return `${shopid}_${itemid}`;
-}
-
-export function priceFromApi(raw) {
-  if (typeof raw !== 'number') return null;
-  return Math.round(raw / PRICE_SCALE);
 }
 
 export function formatPrice(value, currency = 'VND') {

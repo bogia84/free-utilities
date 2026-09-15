@@ -1,8 +1,8 @@
-import { formatPrice, timeAgo } from './common.js';
+import { formatPrice, timeAgo, extractShopeeIds } from './common.js';
 
 const addForm = document.getElementById('addForm');
 const linkInput = document.getElementById('linkInput');
-const checkBtn = document.getElementById('checkBtn');
+const addMsg = document.getElementById('addMsg');
 const statusLine = document.getElementById('statusLine');
 const countLabel = document.getElementById('countLabel');
 const listEl = document.getElementById('productList');
@@ -22,7 +22,7 @@ function renderList(products) {
   listEl.innerHTML = '';
 
   if (products.length === 0) {
-    listEl.innerHTML = '<li class="empty">No products saved yet. Paste a Shopee link above to start tracking.</li>';
+    listEl.innerHTML = '<li class="empty">No products tracked yet. Browse to one on Shopee to get started.</li>';
     return;
   }
 
@@ -48,13 +48,7 @@ function renderList(products) {
       changeEl.textContent = `${change > 0 ? '▲' : '▼'} ${formatPrice(Math.abs(change), product.currency)}`;
     }
 
-    const metaEl = node.querySelector('.meta');
-    if (product.lastError) {
-      metaEl.classList.add('error');
-      metaEl.textContent = `Error: ${product.lastError}`;
-    } else {
-      metaEl.textContent = `Checked ${timeAgo(product.lastCheckedAt)}`;
-    }
+    node.querySelector('.meta').textContent = `Updated ${timeAgo(product.lastCheckedAt)}`;
 
     node.querySelector('.remove').addEventListener('click', async e => {
       e.stopPropagation();
@@ -73,12 +67,11 @@ function renderList(products) {
 async function load() {
   const res = await chrome.runtime.sendMessage({ type: 'GET_STATE' });
   if (!res?.ok) return;
-  renderList(res.products || []);
-  if (res.lastCheck?.at) {
-    statusLine.textContent = `Last checked ${timeAgo(res.lastCheck.at)} — ${res.lastCheck.dropCount || 0} price drop(s)`;
-  } else {
-    statusLine.textContent = 'Prices are checked once a day.';
-  }
+  const products = res.products || [];
+  renderList(products);
+  statusLine.textContent = products.some(p => p.hasNewDrop)
+    ? 'Some tracked products just got cheaper.'
+    : 'Prices update automatically when you visit a tracked product.';
 }
 
 addForm.addEventListener('submit', e => {
@@ -86,24 +79,17 @@ addForm.addEventListener('submit', e => {
   const link = linkInput.value.trim();
   if (!link) return;
 
-  // Adding needs to open the real Shopee page with actual browser focus to
-  // avoid Shopee's anti-bot check — which this small toolbar popup can't do
-  // without Chrome closing it the instant focus moves away. So hand off to
-  // a full page that can survive that.
-  chrome.tabs.create({ url: chrome.runtime.getURL(`add.html?link=${encodeURIComponent(link)}`) });
-  linkInput.value = '';
-});
-
-checkBtn.addEventListener('click', async () => {
-  checkBtn.disabled = true;
-  checkBtn.textContent = 'Checking…';
-  try {
-    await chrome.runtime.sendMessage({ type: 'CHECK_NOW' });
-  } finally {
-    checkBtn.disabled = false;
-    checkBtn.textContent = 'Check now';
-    load();
+  if (!extractShopeeIds(link)) {
+    addMsg.textContent = "That doesn't look like a Shopee product link.";
+    addMsg.className = 'msg error';
+    return;
   }
+
+  // Just open it — content.js will show a "Track this price" button on
+  // the real page once it loads. No fetch happens here.
+  window.open(link, '_blank', 'noopener');
+  linkInput.value = '';
+  addMsg.textContent = '';
 });
 
 load();

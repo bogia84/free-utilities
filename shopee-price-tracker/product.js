@@ -130,31 +130,7 @@ function render(product) {
   }
 
   const metaEl = node.querySelector('.meta');
-  metaEl.textContent = product.lastError
-    ? `Last check failed: ${product.lastError}`
-    : `Last checked ${timeAgo(product.lastCheckedAt)} · Added ${new Date(product.addedAt).toLocaleDateString('en-GB')}`;
-
-  const checkBtn = node.querySelector('#checkOneBtn');
-  const checkMsg = node.querySelector('#checkMsg');
-  checkBtn.addEventListener('click', async () => {
-    checkBtn.disabled = true;
-    checkBtn.textContent = 'Checking…';
-    checkMsg.textContent = '';
-    checkMsg.className = 'msg';
-    try {
-      const res = await chrome.runtime.sendMessage({ type: 'CHECK_ONE', id: product.id });
-      if (!res.ok) throw new Error(res.error);
-      checkMsg.textContent = 'Updated.';
-      checkMsg.className = 'msg ok';
-      render(res.product);
-    } catch (err) {
-      checkMsg.textContent = err.message || String(err);
-      checkMsg.className = 'msg error';
-    } finally {
-      checkBtn.disabled = false;
-      checkBtn.textContent = 'Check price now';
-    }
-  });
+  metaEl.textContent = `Updated ${timeAgo(product.lastCheckedAt)} · Added ${new Date(product.addedAt).toLocaleDateString('en-GB')}`;
 
   const history = (product.history || []).map(p => ({ ...p, currency: product.currency }));
   mainEl.appendChild(node);
@@ -190,5 +166,13 @@ async function load() {
   render(product);
   chrome.runtime.sendMessage({ type: 'CLEAR_DROP_FLAG', id: productId });
 }
+
+// If the price updates while this tab is in the background (e.g. you
+// opened the "Open on Shopee to refresh" link, content.js observed a new
+// price there, and you switched back here), reflect it without needing
+// a manual reload.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.products) load();
+});
 
 load();

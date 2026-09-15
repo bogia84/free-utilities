@@ -15,16 +15,15 @@
   </header>
 
   <main>
-    <p class="hint hint-primary">Best way to add a product: just browse to it on Shopee — a "☆ Track this price" button appears on the page.</p>
+    <p class="hint hint-primary">Browse to a product on Shopee — a "☆ Track this price" button appears on the page.</p>
     <form id="addForm" class="add-row">
-      <input id="linkInput" type="url" placeholder="…or paste a Shopee product link" required>
-      <button id="addBtn" class="primary" type="submit">Add</button>
+      <input id="linkInput" type="url" placeholder="…or paste a Shopee product link to open it" required>
+      <button id="addBtn" class="primary" type="submit">Open</button>
     </form>
-    <p class="hint">This tries an automated fetch, which Shopee's anti-bot check may block — the button on the product page is more reliable.</p>
+    <p id="addMsg" class="msg"></p>
 
     <div class="list-hdr">
       <strong id="countLabel">0 products</strong>
-      <button id="checkBtn">Check now</button>
     </div>
 
     <ul id="productList" class="product-list"></ul>

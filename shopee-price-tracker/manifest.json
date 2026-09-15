@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Shopee Price Tracker",
   "version": "1.0.0",
-  "description": "Save Shopee product links and track their price daily. Click a saved product to see its price history chart.",
+  "description": "Track Shopee product prices as you browse. Click a saved product to see its price history chart.",
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -30,10 +30,7 @@
   ],
   "permissions": [
     "storage",
-    "alarms",
-    "notifications",
-    "scripting",
-    "tabs"
+    "notifications"
   ],
   "host_permissions": [
     "https://shopee.vn/*"
