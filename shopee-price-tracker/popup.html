@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Shopee Price Tracker</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="hdr">
+    <img src="icons/icon48.png" alt="" class="logo">
+    <div>
+      <h1>Shopee Price Tracker</h1>
+      <p id="statusLine" class="muted">Loading…</p>
+    </div>
+  </header>
+
+  <main>
+    <form id="addForm" class="add-row">
+      <input id="linkInput" type="url" placeholder="Paste a Shopee product link…" required>
+      <button id="addBtn" class="primary" type="submit">Add</button>
+    </form>
+    <p id="addMsg" class="msg"></p>
+
+    <div class="list-hdr">
+      <strong id="countLabel">0 products</strong>
+      <button id="checkBtn">Check now</button>
+    </div>
+
+    <ul id="productList" class="product-list"></ul>
+  </main>
+
+  <template id="itemTemplate">
+    <li class="item">
+      <a class="thumb-link" target="_blank" rel="noopener">
+        <img class="thumb" alt="">
+      </a>
+      <div class="info">
+        <a class="name" target="_blank" rel="noopener"></a>
+        <div class="price-row">
+          <span class="price"></span>
+          <span class="change"></span>
+        </div>
+        <div class="meta"></div>
+      </div>
+      <button class="remove" title="Remove">✕</button>
+    </li>
+  </template>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
