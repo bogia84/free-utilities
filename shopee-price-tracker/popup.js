@@ -93,7 +93,8 @@ addForm.addEventListener('submit', async e => {
   if (!link) return;
 
   addBtn.disabled = true;
-  addMsg.textContent = '';
+  addBtn.textContent = 'Adding…';
+  addMsg.textContent = 'Fetching product info — this can take a few seconds…';
   addMsg.className = 'msg';
   try {
     const res = await chrome.runtime.sendMessage({ type: 'ADD_PRODUCT', link });
@@ -107,6 +108,7 @@ addForm.addEventListener('submit', async e => {
     addMsg.className = 'msg error';
   } finally {
     addBtn.disabled = false;
+    addBtn.textContent = 'Add';
   }
 });
 

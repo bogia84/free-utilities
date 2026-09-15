@@ -118,7 +118,10 @@ async function addProduct(link) {
   const products = await getProducts();
   if (products.some(p => p.id === id)) throw new Error('This product is already saved.');
 
-  const info = await fetchShopeeItem(ids.shopid, ids.itemid, link, true);
+  // Called from the toolbar popup — a foreground tab would steal window
+  // focus and Chrome auto-closes the popup the instant it loses focus,
+  // killing this request before it can show a result. Keep it backgrounded.
+  const info = await fetchShopeeItem(ids.shopid, ids.itemid, link, false);
   const now = Date.now();
   const product = {
     id,
